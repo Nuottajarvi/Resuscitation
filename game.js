@@ -12,6 +12,8 @@ let BPM = 30;
 let beat = 0;
 
 let playing = false;
+let paused = false;
+let pausetexts;
 let menuElems;
 let cutscene;
 let idleanim;
@@ -24,6 +26,7 @@ let cursors;
 let jumpButton;
 let pauseButton;
 let shader;
+let titleShader;
 let timer;
 let healthPack;
 
@@ -34,6 +37,7 @@ let startPos;
 function preload() {
     game.load.spritesheet('player', 'assets/player.png', 32, 48);
     game.load.spritesheet('cutscene', 'assets/cutscene.png', 64, 64);
+    game.load.spritesheet('endscene', 'assets/endscene.png', 64, 64);
     game.load.image('tileset', 'assets/tileset.png');
     game.load.image('levelheart', 'assets/levelheart.png');
     game.load.image('healthpack', 'assets/heart.png');
@@ -153,18 +157,44 @@ function loadNewLevel() {
     bpmMeter.bringToTop();
 }
 
+function endGame() {
+    BPM = 30;
+    playing = false;
+    walls.destroy();
+    player.destroy();
+    bpmMeter.destroy();
+    endscene = game.add.sprite(230, 140, 'endscene');
+    endscene.scale.x = 5;
+    endscene.scale.y = 5;
+
+    const full = endscene.animations.add('full', null, 5, false);
+
+    full.onComplete.add(() => {
+        
+        const title = game.add.text(CANVASWIDTH / 2 - 100, CANVASHEIGHT / 2, "Thanks for playing", {font: "24px november", fill: "red"});
+        const title2 = game.add.text(CANVASWIDTH / 2 - 148, CANVASHEIGHT / 2 + 64, "Game by Peetu Nuottajarvi", {font: "24px november", fill: "#990000"});
+
+        titleShader = new Phaser.Filter(game, null, getTitleShader());
+        titleShader.uniforms.beat = {type: '1f', value: 0};
+        title.filters = [titleShader];
+
+    });
+
+    endscene.animations.play('full');
+}
+
 function create() {
-    const title = game.add.text(CANVASWIDTH / 2, 32, "Rescuscitation", {font: "24px november", fill: "red"});
+    const title = game.add.text(CANVASWIDTH / 2 - 100, 32, "Rescuscitation", {font: "24px november", fill: "red"});
 
     titleShader = new Phaser.Filter(game, null, getTitleShader());
     titleShader.uniforms.beat = {type: '1f', value: 0};
     title.filters = [titleShader];
 
-    const controls = game.add.text(260, 540, "Move with ARROW KEYS, jump with SPACE", {font: "24px november", fill: "#990000"})
+    const controls = game.add.text(160, 540, "Move with ARROW KEYS, jump with SPACE", {font: "24px november", fill: "#990000"})
 
-    const start = game.add.text(280, 570, "Start and pause by pressing ENTER", {font: "24px november", fill: "#990000"})
+    const start = game.add.text(180, 570, "Start and pause by pressing ENTER", {font: "24px november", fill: "#990000"});
 
-    cutscene = game.add.sprite(330, 140, 'cutscene');
+    cutscene = game.add.sprite(230, 140, 'cutscene');
     cutscene.scale.x = 5;
     cutscene.scale.y = 5;
 
@@ -181,6 +211,21 @@ function create() {
     menuElems = [cutscene, title, controls, start];
 
     pauseButton = game.input.keyboard.addKey(Phaser.Keyboard.ENTER);
+    pauseButton.onDown.add(() => {
+        if(playing) {
+            paused = !paused;
+            if(paused) {
+                player.animations.stop();
+                pausetexts = [
+                    game.add.text(CANVASWIDTH / 2 - 38, 300, "PAUSED", {font: "24px november", fill: "#990000"}),
+                    game.add.text(CANVASWIDTH / 2 - 140, 360, "press ENTER to continue", {font: "24px november", fill: "#990000"})
+                ];
+            } else {
+                pausetexts.forEach(pt => pt.destroy());
+            }
+            game.physics.arcade.isPaused = paused;
+        }
+    });
 
     timer = new Phaser.Time(game);
 }
@@ -208,7 +253,7 @@ function play() {
     player.animations.add('right', [8, 9, 10, 11], 8, true);
     player.animations.add('death', [12,13,14], 8, false);
 
-    bpmMeter = game.add.text(CANVASWIDTH / 2, 32, "BPM", {font: "24px november", fill: "red"})
+    bpmMeter = game.add.text(CANVASWIDTH / 2 - 32, 32, "BPM", {font: "24px november", fill: "red"})
 
     cursors = game.input.keyboard.createCursorKeys();
     jumpButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
@@ -228,7 +273,15 @@ function play() {
 }
 
 let changingLevel = false;
+let onPauseMenu = false;
 function update() {
+    if (paused) {
+        game.physics.arcade.collide(player, walls);
+        bgShader.uniforms.beat.value = 0;
+        bgShader.update();
+        return;
+    }
+
     const menu = !playing;
     if (menu) {
         titleShader.uniforms.beat.value = beat;
@@ -300,8 +353,12 @@ function update() {
         }
 
         if (player.x >= CANVASWIDTH - 32 && !changingLevel) {
-            if(room == 8) {
-                walls.destroy();
+            console.log(room, level);
+            if(room === 8) {
+                if(level === 3) {
+                    endGame();
+                    return;
+                }
                 changingLevel = true;
                 player.body.enable = false;
                 player.x = 10000;
@@ -329,7 +386,6 @@ function update() {
                 }, 4000);
 
             } else {
-                walls.destroy();
                 room += 1;
                 loadNewLevel();
             }
