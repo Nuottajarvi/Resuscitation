@@ -20,6 +20,7 @@ let cursors;
 let jumpButton;
 let shader;
 let timer;
+let healthPack;
 
 let level = 1;
 let room = 1;
@@ -28,7 +29,9 @@ let startPos;
 function preload() {
     game.load.spritesheet('player', 'assets/player.png', 32, 48);
     game.load.image('tileset', 'assets/tileset.png');
-    for(let lvl = 1; lvl <= 3; lvl++) {
+    game.load.image('levelheart', 'assets/levelheart.png');
+    game.load.image('healthpack', 'assets/heart.png');
+    for(let lvl = 1; lvl <= 2; lvl++) {
         for(let room = 1; room <= 8; room++) {
             game.load.image(`level${lvl}-${room}`, `assets/levels/${lvl}/${room}.png`);
         }
@@ -88,10 +91,16 @@ function die(player, tile) {
     }
 }
 
+function addbpm() {
+    BPM += 30;
+    BPM = Math.min(BPM, 60);
+    healthPack.destroy();
+}
+
 function gameOver() {
     if(!waitingDie) {
         waitingDie = true;
-        player.body.enable = false;
+        //player.body.enable = false;
         player.animations.play('death');
         setTimeout(async () => {
             room = 0;
@@ -116,6 +125,18 @@ function loadNewLevel() {
     walls = lvldata.walls;
     walls.filters = [bgShader];
     startPos = lvldata.startPos;
+    const hpackPos = lvldata.healthPack;
+
+    if(healthPack)
+        healthPack.destroy();
+
+    if(hpackPos) {
+        healthPack = game.add.sprite(hpackPos.x, hpackPos.y, 'healthpack');
+        game.physics.arcade.enable([healthPack]);
+        healthPack.body.allowGravity = false;
+        healthPack.body.onCollide = new Phaser.Signal();
+        healthPack.body.onCollide.add(addbpm, this);
+    }
 
     player.x = startPos.x;
     player.y = startPos.y;
@@ -124,7 +145,7 @@ function loadNewLevel() {
 }
 
 function create() {
-
+    game.stage.disableVisibilityChange = true;
     game.physics.startSystem(Phaser.Physics.ARCADE);
 
     game.physics.arcade.gravity.y = 300;
@@ -145,7 +166,7 @@ function create() {
     player.animations.add('right', [8, 9, 10, 11], 8, true);
     player.animations.add('death', [12,13,14], 8, false);
 
-    bpmMeter = game.add.text(CANVASWIDTH / 2, 16, "60 BPM", {fill: "red"})
+    bpmMeter = game.add.text(CANVASWIDTH / 2, 32, "BPM", {font: "24px november", fill: "red"})
 
     cursors = game.input.keyboard.createCursorKeys();
     jumpButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
@@ -164,12 +185,17 @@ function create() {
     tilemapImg.load('tileset');
 }
 
+let changingLevel = false;
 function update() {
     game.physics.arcade.collide(player, walls);
 
+    if(healthPack) {
+        game.physics.arcade.collide(player, healthPack);
+    }
+
     player.body.velocity.x = 0;
 
-    if(player.body.enable) {
+    if(!waitingDie) {
         if (cursors.left.isDown)
         {
             player.body.velocity.x = -speed;
@@ -216,18 +242,45 @@ function update() {
         }
     }
 
-    if (player.x >= CANVASWIDTH - 32) {
+    if (player.x >= CANVASWIDTH - 32 && !changingLevel) {
         if(room == 8) {
-            room = 1;
-            level += 1;
-            BPM = 60;
+            walls.destroy();
+            changingLevel = true;
+            player.body.enable = false;
+            player.x = 10000;
+
+            levelheart = game.add.sprite(CANVASWIDTH / 2 - 52, CANVASHEIGHT / 2, 'levelheart');
+            leveltext = game.add.text(CANVASWIDTH / 2 , CANVASHEIGHT / 2 - 64, "Level " + (level + 1), {font: "24px november", fill: "red"})
+            levelheart.scale.setTo(2, 2);
+            levelheart.filters = [bgShader];
+
+            const origBPM = BPM;
+            const BPMincreaser = setInterval(() => {
+                BPM += (60 - origBPM) / 100;
+            }, 40);
+
+            setTimeout(() => {
+                player.body.enable = true;
+                levelheart.destroy();
+                leveltext.destroy();
+                room = 1;
+                level += 1;
+                changingLevel = false;
+                clearInterval(BPMincreaser);
+                loadNewLevel();
+                BPM = 60;
+            }, 4000);
+
         } else {
+            walls.destroy();
             room += 1;
+            loadNewLevel();
         }
-        loadNewLevel();
     }
 
-    BPM -= timer.physicsElapsedMS * 0.001 * difficulties[level];
+    if(!changingLevel)
+        BPM -= timer.physicsElapsedMS * 0.001 * difficulties[level];
+
     beat += timer.physicsElapsedMS * 0.001;
 
     if(BPM <= -1) {

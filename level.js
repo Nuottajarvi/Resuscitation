@@ -16,6 +16,7 @@ function loadLevel(lvl, room, game, die) {
 	let startPos;
 
 	let tilemapStr = "";
+	let healthPack;
 
 	for(let y = 0; y < pixels.length; y++) {
 		let row = [];
@@ -31,6 +32,10 @@ function loadLevel(lvl, room, game, die) {
 
 			if (isGreen(px)) {
 				startPos = {x: x*w, y: y*w-24};
+			}
+
+			if(isYellow(px)) {
+				healthPack = {x: x*w, y:y*w};
 			}
 		}
 		tilemapStr += row.join(",") + "\n";
@@ -50,7 +55,9 @@ function loadLevel(lvl, room, game, die) {
 		map.setTileIndexCallback(i, die, this)
 	);
 
-	return {walls: layer, startPos};
+	map.setTileIndexCallback(6, addbpm, this);
+
+	return {walls: layer, startPos, healthPack};
 }
 
 function isBlack(px) {
@@ -63,6 +70,10 @@ function isRed(px) {
 
 function isGreen(px) {
 	return px.r <= 50 && px.g >= 200 && px.b <= 50;
+}
+
+function isYellow(px) {
+	return px.r >= 200 && px.g >= 200 && px.b <= 50;
 }
 
 function createSpike(pixels, x, y) {
@@ -86,7 +97,7 @@ function createSpike(pixels, x, y) {
 	const vertical = "v";
 
 	//CHECKS FOR LINES OF SPIKES
-	if(isRed(pixels[y][x + 1] || isRed(pixels[y][x - 1]))) {
+	if(isRed(pixels[y][x + 1]) || isRed(pixels[y][x - 1])) {
 		flag = horizontal;
 	}
 	if(isRed(pixels[y + 1][x]) || isRed(pixels[y - 1][x])) {
