@@ -8,9 +8,13 @@ const difficulties = [0.9, 0.8, 0.9];
 
 const game = new Phaser.Game(CANVASWIDTH, CANVASHEIGHT, Phaser.AUTO, 'gameCanvas', {preload, create, update}, false, false);
 
-let BPM = 60;
+let BPM = 30;
 let beat = 0;
 
+let playing = false;
+let menuElems;
+let cutscene;
+let idleanim;
 let player;
 let walls;
 let bpmMeter;
@@ -18,6 +22,7 @@ let facing = 'left';
 let jumpTimer = 0;
 let cursors;
 let jumpButton;
+let pauseButton;
 let shader;
 let timer;
 let healthPack;
@@ -28,14 +33,17 @@ let startPos;
 
 function preload() {
     game.load.spritesheet('player', 'assets/player.png', 32, 48);
+    game.load.spritesheet('cutscene', 'assets/cutscene.png', 64, 64);
     game.load.image('tileset', 'assets/tileset.png');
     game.load.image('levelheart', 'assets/levelheart.png');
     game.load.image('healthpack', 'assets/heart.png');
-    for(let lvl = 1; lvl <= 2; lvl++) {
+    for(let lvl = 1; lvl <= 3; lvl++) {
         for(let room = 1; room <= 8; room++) {
             game.load.image(`level${lvl}-${room}`, `assets/levels/${lvl}/${room}.png`);
         }
     }
+
+    document.fonts.load('10pt "november"');
 }
 
 let waitingDie = false;
@@ -92,7 +100,7 @@ function die(player, tile) {
 }
 
 function addbpm() {
-    BPM += 30;
+    BPM += 20;
     BPM = Math.min(BPM, 60);
     healthPack.destroy();
 }
@@ -121,6 +129,7 @@ function gameOver() {
 }
 
 function loadNewLevel() {
+    walls.destroy();
     const lvldata = loadLevel(level, room, game, die);
     walls = lvldata.walls;
     walls.filters = [bgShader];
@@ -145,7 +154,40 @@ function loadNewLevel() {
 }
 
 function create() {
+    const title = game.add.text(CANVASWIDTH / 2, 32, "Rescuscitation", {font: "24px november", fill: "red"});
+
+    titleShader = new Phaser.Filter(game, null, getTitleShader());
+    titleShader.uniforms.beat = {type: '1f', value: 0};
+    title.filters = [titleShader];
+
+    const controls = game.add.text(260, 540, "Move with ARROW KEYS, jump with SPACE", {font: "24px november", fill: "#990000"})
+
+    const start = game.add.text(280, 570, "Start and pause by pressing ENTER", {font: "24px november", fill: "#990000"})
+
+    cutscene = game.add.sprite(330, 140, 'cutscene');
+    cutscene.scale.x = 5;
+    cutscene.scale.y = 5;
+
+    cutscene.animations.add('idle', [0, 1, 2, 3, 4], 5, false);
+    const full = cutscene.animations.add('full', null, 5, false);
+
+    full.onComplete.add(play);
+    
+    cutscene.animations.play('idle');
+    idleanim = setInterval(() => {
+        cutscene.animations.play('idle');
+    }, 2500);
+
+    menuElems = [cutscene, title, controls, start];
+
+    pauseButton = game.input.keyboard.addKey(Phaser.Keyboard.ENTER);
+
+    timer = new Phaser.Time(game);
+}
+
+function play() {   
     game.stage.disableVisibilityChange = true;
+    BPM = 60;
     game.physics.startSystem(Phaser.Physics.ARCADE);
 
     game.physics.arcade.gravity.y = 300;
@@ -179,121 +221,141 @@ function create() {
     playerShader.uniforms.beat = {type: '1f', value: 0};
     player.filters = [playerShader];
 
-    timer = new Phaser.Time(game);
-
     tilemapImg = game.make.bitmapData();
     tilemapImg.load('tileset');
+
+    playing = true;
 }
 
 let changingLevel = false;
 function update() {
-    game.physics.arcade.collide(player, walls);
+    const menu = !playing;
+    if (menu) {
+        titleShader.uniforms.beat.value = beat;
+        titleShader.update();
+        doBeat();
 
-    if(healthPack) {
-        game.physics.arcade.collide(player, healthPack);
-    }
-
-    player.body.velocity.x = 0;
-
-    if(!waitingDie) {
-        if (cursors.left.isDown)
-        {
-            player.body.velocity.x = -speed;
-
-            if (facing != 'left')
-            {
-                player.animations.play('left');
-                facing = 'left';
+        if(pauseButton.isDown) {
+            for(let i = 1; i < menuElems.length; i++) {
+                menuElems[i].destroy();
             }
+            clearInterval(idleanim);
+            cutscene.animations.play('full');
         }
-        else if (cursors.right.isDown)
-        {
-            player.body.velocity.x = speed;
 
-            if (facing != 'right')
-            {
-                player.animations.play('right');
-                facing = 'right';
-            }
+    } else {
+        game.physics.arcade.collide(player, walls);
+
+        if(healthPack) {
+            game.physics.arcade.collide(player, healthPack);
         }
-        else
-        {
-            if (facing != 'idle')
-            {
-                player.animations.stop();
 
-                if (facing == 'left')
+        player.body.velocity.x = 0;
+
+        if(!waitingDie) {
+            if (cursors.left.isDown)
+            {
+                player.body.velocity.x = -speed;
+
+                if (facing != 'left')
                 {
-                    player.frame = 1;
+                    player.animations.play('left');
+                    facing = 'left';
                 }
-                else
-                {
-                    player.frame = 0;
-                }
+            }
+            else if (cursors.right.isDown)
+            {
+                player.body.velocity.x = speed;
 
-                facing = 'idle';
+                if (facing != 'right')
+                {
+                    player.animations.play('right');
+                    facing = 'right';
+                }
+            }
+            else
+            {
+                if (facing != 'idle')
+                {
+                    player.animations.stop();
+
+                    if (facing == 'left')
+                    {
+                        player.frame = 1;
+                    }
+                    else
+                    {
+                        player.frame = 0;
+                    }
+
+                    facing = 'idle';
+                }
+            }
+            
+            if (jumpButton.isDown && player.body.onFloor() && game.time.now > jumpTimer)
+            {
+                player.body.velocity.y = jump;
+                jumpTimer = game.time.now + 100;
             }
         }
-        
-        if (jumpButton.isDown && player.body.onFloor() && game.time.now > jumpTimer)
-        {
-            player.body.velocity.y = jump;
-            jumpTimer = game.time.now + 100;
-        }
-    }
 
-    if (player.x >= CANVASWIDTH - 32 && !changingLevel) {
-        if(room == 8) {
-            walls.destroy();
-            changingLevel = true;
-            player.body.enable = false;
-            player.x = 10000;
+        if (player.x >= CANVASWIDTH - 32 && !changingLevel) {
+            if(room == 8) {
+                walls.destroy();
+                changingLevel = true;
+                player.body.enable = false;
+                player.x = 10000;
 
-            levelheart = game.add.sprite(CANVASWIDTH / 2 - 52, CANVASHEIGHT / 2, 'levelheart');
-            leveltext = game.add.text(CANVASWIDTH / 2 , CANVASHEIGHT / 2 - 64, "Level " + (level + 1), {font: "24px november", fill: "red"})
-            levelheart.scale.setTo(2, 2);
-            levelheart.filters = [bgShader];
+                levelheart = game.add.sprite(CANVASWIDTH / 2 - 52, CANVASHEIGHT / 2, 'levelheart');
+                leveltext = game.add.text(CANVASWIDTH / 2 , CANVASHEIGHT / 2 - 64, "Level " + (level + 1), {font: "24px november", fill: "red"})
+                levelheart.scale.setTo(2, 2);
+                levelheart.filters = [bgShader];
 
-            const origBPM = BPM;
-            const BPMincreaser = setInterval(() => {
-                BPM += (60 - origBPM) / 100;
-            }, 40);
+                const origBPM = BPM;
+                const BPMincreaser = setInterval(() => {
+                    BPM += (60 - origBPM) / 100;
+                }, 40);
 
-            setTimeout(() => {
-                player.body.enable = true;
-                levelheart.destroy();
-                leveltext.destroy();
-                room = 1;
-                level += 1;
-                changingLevel = false;
-                clearInterval(BPMincreaser);
+                setTimeout(() => {
+                    clearInterval(BPMincreaser);
+                    player.body.enable = true;
+                    levelheart.destroy();
+                    leveltext.destroy();
+                    room = 1;
+                    level += 1;
+                    changingLevel = false;
+                    loadNewLevel();
+                    BPM = 60;
+                }, 4000);
+
+            } else {
+                walls.destroy();
+                room += 1;
                 loadNewLevel();
-                BPM = 60;
-            }, 4000);
-
-        } else {
-            walls.destroy();
-            room += 1;
-            loadNewLevel();
+            }
         }
+
+        if(!changingLevel)
+            BPM -= timer.physicsElapsedMS * 0.001 * difficulties[level];
+
+        doBeat();
+        bpmMeter.text = Math.ceil(BPM) + " BPM";
+
+        playerShader.uniforms.beat.value = beat;
+        playerShader.update();
+        bgShader.uniforms.beat.value = beat;
+        bgShader.update();
     }
 
-    if(!changingLevel)
-        BPM -= timer.physicsElapsedMS * 0.001 * difficulties[level];
+    function doBeat() {
+        beat += timer.physicsElapsedMS * 0.001;
 
-    beat += timer.physicsElapsedMS * 0.001;
+        if(BPM <= -1) {
+            gameOver();
+            BPM = 0;
+        }
 
-    if(BPM <= -1) {
-        gameOver();
-        BPM = 0;
+        if(BPM > 0 && beat > 60 / Math.max(9, BPM))
+            beat = 0;
     }
-
-    bpmMeter.text = Math.ceil(BPM) + " BPM";
-    if(BPM > 0 && beat > 60 / Math.max(9, BPM))
-        beat = 0;
-
-    playerShader.uniforms.beat.value = beat;
-    playerShader.update();
-    bgShader.uniforms.beat.value = beat;
-    bgShader.update();
 }
