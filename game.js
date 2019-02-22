@@ -1,10 +1,11 @@
 const CANVASWIDTH = 800;
 const CANVASHEIGHT = 640;
+const DEBUG = false;
 
 const speed = 300;
-const jump = -550;
+const jump = -555;
 
-const difficulties = [0.9, 0.8, 0.9];
+const difficulties = [0.9, 0.8, 1.0];
 
 const game = new Phaser.Game(CANVASWIDTH, CANVASHEIGHT, Phaser.AUTO, 'gameCanvas', {preload, create, update}, false, false);
 
@@ -29,6 +30,7 @@ let shader;
 let titleShader;
 let timer;
 let healthPack;
+let progressbar;
 
 let level = 1;
 let room = 1;
@@ -40,6 +42,7 @@ function preload() {
     game.load.spritesheet('endscene', 'assets/endscene.png', 64, 64);
     game.load.image('tileset', 'assets/tileset.png');
     game.load.image('levelheart', 'assets/levelheart.png');
+    game.load.image('progressbar', 'assets/progressbar.png');
     game.load.image('healthpack', 'assets/heart.png');
     for(let lvl = 1; lvl <= 3; lvl++) {
         for(let room = 1; room <= 8; room++) {
@@ -136,7 +139,7 @@ function loadNewLevel() {
     walls.destroy();
     const lvldata = loadLevel(level, room, game, die);
     walls = lvldata.walls;
-    walls.filters = [bgShader];
+    refreshShaders();
     startPos = lvldata.startPos;
     const hpackPos = lvldata.healthPack;
 
@@ -148,42 +151,106 @@ function loadNewLevel() {
         game.physics.arcade.enable([healthPack]);
         healthPack.body.allowGravity = false;
         healthPack.body.onCollide = new Phaser.Signal();
-        healthPack.body.onCollide.add(addbpm, this);
+        healthPack.body.onCollide.add(function() {
+            if(room === 8) {
+                healthPack.destroy();
+                endGame();
+            } else {
+                addbpm();
+            }
+        }, this);
     }
 
     player.x = startPos.x;
     player.y = startPos.y;
     player.bringToTop();
     bpmMeter.bringToTop();
+    progressbar.bringToTop();
+    setProgressbar(room - 1);
+}
+
+function clamp(x, a, b) {
+    return Math.min(b, Math.max(x, a));
+}
+
+function smoothStep(edge0, edge1, x) {
+    t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t)
+};
+
+function setProgressbar(val) {
+    const oldscale = progressbar.scale.x;//8 * 10 * progressbar.scale.x/CANVASWIDTH;
+    const newscale = CANVASWIDTH / 10 * val / 8;
+
+    let i = 0;
+    const lerper = setInterval(() => {
+        progressbar.scale.x = oldscale + (newscale - oldscale) * smoothStep(0, 1, i / 30);
+        if (i === 30) {
+            clearInterval(lerper);
+        }
+        i++;
+    }, 16);
 }
 
 function endGame() {
     BPM = 30;
     playing = false;
-    walls.destroy();
-    player.destroy();
-    bpmMeter.destroy();
-    endscene = game.add.sprite(230, 140, 'endscene');
-    endscene.scale.x = 5;
-    endscene.scale.y = 5;
+    player.visible = false;
+    bpmMeter.visible = false;
+    setProgressbar(0);
+    setTimeout(() => {
+        walls.destroy();
+        player.destroy();
+        bpmMeter.destroy();
+        endscene = game.add.sprite(230, 140, 'endscene');
+        endscene.scale.x = 5;
+        endscene.scale.y = 5;
 
-    const full = endscene.animations.add('full', null, 5, false);
+        const full = endscene.animations.add('full', null, 5, false);
 
-    full.onComplete.add(() => {
-        
-        const title = game.add.text(CANVASWIDTH / 2 - 100, CANVASHEIGHT / 2, "Thanks for playing", {font: "24px november", fill: "red"});
-        const title2 = game.add.text(CANVASWIDTH / 2 - 148, CANVASHEIGHT / 2 + 64, "Game by Peetu Nuottajarvi", {font: "24px november", fill: "#990000"});
+        full.onComplete.add(() => {
+            
+            const title = game.add.text(CANVASWIDTH / 2 - 100, CANVASHEIGHT / 2, "Thanks for playing", {font: "24px november", fill: "red"});
+            const title2 = game.add.text(CANVASWIDTH / 2 - 148, CANVASHEIGHT / 2 + 64, "Game by Peetu Nuottajarvi", {font: "24px november", fill: "#990000"});
 
-        titleShader = new Phaser.Filter(game, null, getTitleShader());
-        titleShader.uniforms.beat = {type: '1f', value: 0};
-        title.filters = [titleShader];
+            titleShader = new Phaser.Filter(game, null, getTitleShader());
+            titleShader.uniforms.beat = {type: '1f', value: 0};
+            title.filters = [titleShader];
 
-    });
+        });
 
-    endscene.animations.play('full');
+        endscene.animations.play('full');
+    }, 800);
 }
 
 function create() {
+    timer = new Phaser.Time(game);
+
+    const pause = () => {
+        if(playing) {
+            paused = !paused;
+            if(paused) {
+                player.animations.stop();
+                pausetexts = [
+                    game.add.text(CANVASWIDTH / 2 - 38, 300, "PAUSED", {font: "24px november", fill: "#990000"}),
+                    game.add.text(CANVASWIDTH / 2 - 140, 360, "press ENTER to continue", {font: "24px november", fill: "#990000"})
+                ];
+            } else {
+                pausetexts.forEach(pt => pt.destroy());
+            }
+            game.physics.arcade.isPaused = paused;
+        }
+    };
+
+    pauseButton = game.input.keyboard.addKey(Phaser.Keyboard.ENTER);
+    pauseButton.onDown.add(pause);
+
+    const pauseButtonAlt = game.input.keyboard.addKey(Phaser.Keyboard.P);
+    pauseButtonAlt.onDown.add(pause);
+    if(DEBUG) {
+        play();
+        return;
+    }
     const title = game.add.text(CANVASWIDTH / 2 - 100, 32, "Rescuscitation", {font: "24px november", fill: "red"});
 
     titleShader = new Phaser.Filter(game, null, getTitleShader());
@@ -209,28 +276,25 @@ function create() {
     }, 2500);
 
     menuElems = [cutscene, title, controls, start];
-
-    pauseButton = game.input.keyboard.addKey(Phaser.Keyboard.ENTER);
-    pauseButton.onDown.add(() => {
-        if(playing) {
-            paused = !paused;
-            if(paused) {
-                player.animations.stop();
-                pausetexts = [
-                    game.add.text(CANVASWIDTH / 2 - 38, 300, "PAUSED", {font: "24px november", fill: "#990000"}),
-                    game.add.text(CANVASWIDTH / 2 - 140, 360, "press ENTER to continue", {font: "24px november", fill: "#990000"})
-                ];
-            } else {
-                pausetexts.forEach(pt => pt.destroy());
-            }
-            game.physics.arcade.isPaused = paused;
-        }
-    });
-
-    timer = new Phaser.Time(game);
 }
 
-function play() {   
+function refreshShaders() {
+
+    if(walls.filters) {
+        walls.filters[0].destroy();
+        player.filters[0].destroy();
+    }
+
+    bgShader = new Phaser.Filter(game, null, getBgShader());
+    bgShader.uniforms.beat = {type: '1f', value: 0};
+    walls.filters = [bgShader];
+
+    playerShader = new Phaser.Filter(game, null, getPlayerShader());
+    playerShader.uniforms.beat = {type: '1f', value: 0};
+    player.filters = [playerShader];
+}
+
+function play() {
     game.stage.disableVisibilityChange = true;
     BPM = 60;
     game.physics.startSystem(Phaser.Physics.ARCADE);
@@ -253,18 +317,15 @@ function play() {
     player.animations.add('right', [8, 9, 10, 11], 8, true);
     player.animations.add('death', [12,13,14], 8, false);
 
+    progressbar = game.add.sprite(0, CANVASHEIGHT - 10, 'progressbar');
+    progressbar.scale.x = 0;
+
     bpmMeter = game.add.text(CANVASWIDTH / 2 - 32, 32, "BPM", {font: "24px november", fill: "red"})
 
     cursors = game.input.keyboard.createCursorKeys();
     jumpButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
 
-    bgShader = new Phaser.Filter(game, null, getBgShader());
-    bgShader.uniforms.beat = {type: '1f', value: 0};
-    walls.filters = [bgShader];
-
-    playerShader = new Phaser.Filter(game, null, getPlayerShader());
-    playerShader.uniforms.beat = {type: '1f', value: 0};
-    player.filters = [playerShader];
+    refreshShaders();
 
     tilemapImg = game.make.bitmapData();
     tilemapImg.load('tileset');
@@ -353,18 +414,15 @@ function update() {
         }
 
         if (player.x >= CANVASWIDTH - 32 && !changingLevel) {
-            console.log(room, level);
             if(room === 8) {
-                if(level === 3) {
-                    endGame();
-                    return;
-                }
+                walls.destroy();
+                setProgressbar(8);
                 changingLevel = true;
                 player.body.enable = false;
                 player.x = 10000;
 
-                levelheart = game.add.sprite(CANVASWIDTH / 2 - 52, CANVASHEIGHT / 2, 'levelheart');
-                leveltext = game.add.text(CANVASWIDTH / 2 , CANVASHEIGHT / 2 - 64, "Level " + (level + 1), {font: "24px november", fill: "red"})
+                levelheart = game.add.sprite(CANVASWIDTH / 2 - 92, CANVASHEIGHT / 2, 'levelheart');
+                leveltext = game.add.text(CANVASWIDTH / 2 - 34 , CANVASHEIGHT / 2 - 64, "Level " + (level + 1), {font: "24px november", fill: "red"})
                 levelheart.scale.setTo(2, 2);
                 levelheart.filters = [bgShader];
 
@@ -392,7 +450,7 @@ function update() {
         }
 
         if(!changingLevel)
-            BPM -= timer.physicsElapsedMS * 0.001 * difficulties[level];
+            BPM -= timer.physicsElapsedMS * 0.001 * difficulties[level-1];
 
         doBeat();
         bpmMeter.text = Math.ceil(BPM) + " BPM";
