@@ -31,6 +31,7 @@ let titleShader;
 let timer;
 let healthPack;
 let progressbar;
+let bgShader;
 
 let level = 1;
 let room = 1;
@@ -41,7 +42,9 @@ function preload() {
     game.load.spritesheet('cutscene', 'assets/cutscene.png', 64, 64);
     game.load.spritesheet('endscene', 'assets/endscene.png', 64, 64);
     game.load.image('tileset', 'assets/tileset.png');
-    game.load.image('levelheart', 'assets/levelheart.png');
+    for(let lvl = 1; lvl <= 3; lvl++) {
+       game.load.image('levelheart' + lvl, `assets/levelheart${lvl}.png`);
+    }
     game.load.image('progressbar', 'assets/progressbar.png');
     game.load.image('healthpack', 'assets/heart.png');
     for(let lvl = 1; lvl <= 3; lvl++) {
@@ -179,7 +182,7 @@ function smoothStep(edge0, edge1, x) {
 };
 
 function setProgressbar(val) {
-    const oldscale = progressbar.scale.x;//8 * 10 * progressbar.scale.x/CANVASWIDTH;
+    const oldscale = progressbar.scale.x;
     const newscale = CANVASWIDTH / 10 * val / 8;
 
     let i = 0;
@@ -194,12 +197,12 @@ function setProgressbar(val) {
 
 function endGame() {
     BPM = 30;
-    playing = false;
+    walls.destroy();
     player.visible = false;
     bpmMeter.visible = false;
     setProgressbar(0);
     setTimeout(() => {
-        walls.destroy();
+        playing = false;
         player.destroy();
         bpmMeter.destroy();
         endscene = game.add.sprite(230, 140, 'endscene');
@@ -213,9 +216,10 @@ function endGame() {
             const title = game.add.text(CANVASWIDTH / 2 - 100, CANVASHEIGHT / 2, "Thanks for playing", {font: "24px november", fill: "red"});
             const title2 = game.add.text(CANVASWIDTH / 2 - 148, CANVASHEIGHT / 2 + 64, "Game by Peetu Nuottajarvi", {font: "24px november", fill: "#990000"});
 
-            titleShader = new Phaser.Filter(game, null, getTitleShader());
-            titleShader.uniforms.beat = {type: '1f', value: 0};
-            title.filters = [titleShader];
+            const levelheart = game.add.sprite(CANVASWIDTH / 2 - 152, CANVASHEIGHT / 2 - 150, 'levelheart3');
+            levelheart.scale.setTo(2, 2);
+            levelheart.filters = [bgShader];
+            levelheart.bringToTop();
 
         });
 
@@ -335,6 +339,7 @@ function play() {
 
 let changingLevel = false;
 let onPauseMenu = false;
+let skipFrame = 0;
 function update() {
     if (paused) {
         game.physics.arcade.collide(player, walls);
@@ -348,6 +353,10 @@ function update() {
         titleShader.uniforms.beat.value = beat;
         titleShader.update();
         doBeat();
+        if (bgShader) {
+            bgShader.uniforms.beat.value = beat;
+            bgShader.update();
+        }
 
         if(pauseButton.isDown) {
             for(let i = 1; i < menuElems.length; i++) {
@@ -421,7 +430,7 @@ function update() {
                 player.body.enable = false;
                 player.x = 10000;
 
-                levelheart = game.add.sprite(CANVASWIDTH / 2 - 92, CANVASHEIGHT / 2, 'levelheart');
+                levelheart = game.add.sprite(CANVASWIDTH / 2 - 152, CANVASHEIGHT / 2, 'levelheart' + level);
                 leveltext = game.add.text(CANVASWIDTH / 2 - 34 , CANVASHEIGHT / 2 - 64, "Level " + (level + 1), {font: "24px november", fill: "red"})
                 levelheart.scale.setTo(2, 2);
                 levelheart.filters = [bgShader];
@@ -455,10 +464,14 @@ function update() {
         doBeat();
         bpmMeter.text = Math.ceil(BPM) + " BPM";
 
-        playerShader.uniforms.beat.value = beat;
-        playerShader.update();
-        bgShader.uniforms.beat.value = beat;
-        bgShader.update();
+        if(skipFrame == 0) {
+            playerShader.uniforms.beat.value = beat;
+            playerShader.update();
+            bgShader.uniforms.beat.value = beat;
+            bgShader.update();
+        }
+
+        skipFrame = (skipFrame + 1) % 2;
     }
 
     function doBeat() {
