@@ -10,7 +10,7 @@ const difficulties = [0.9, 0.8, 1.0];
 const game = new Phaser.Game(CANVASWIDTH, CANVASHEIGHT, Phaser.AUTO, 'gameCanvas', {preload, create, update}, false, false);
 
 let BPM = 30;
-let beat = 0;
+let beat = 61; //over 60
 
 let playing = false;
 let paused = false;
@@ -33,6 +33,11 @@ let healthPack;
 let progressbar;
 let bgShader;
 
+const audioNames = ["heartbeat", "intro", "introloop", "song", "ending"];
+const audio = {};
+let heartbeatAudioOn = false;
+let introPlayer;
+
 let level = 1;
 let room = 1;
 let startPos;
@@ -52,6 +57,10 @@ function preload() {
             game.load.image(`level${lvl}-${room}`, `assets/levels/${lvl}/${room}.png`);
         }
     }
+    
+    audioNames.forEach((audioName) => {
+        game.load.audio(audioName, `assets/audio/${audioName}.wav`);
+    });
 
     document.fonts.load('10pt "november"');
 }
@@ -203,6 +212,7 @@ function endGame() {
     setProgressbar(0);
     setTimeout(() => {
         playing = false;
+        heartbeatAudioOn = false;
         player.destroy();
         bpmMeter.destroy();
         endscene = game.add.sprite(230, 140, 'endscene');
@@ -210,16 +220,35 @@ function endGame() {
         endscene.scale.y = 5;
 
         const full = endscene.animations.add('full', null, 5, false);
+        audio["ending"].play();
 
         full.onComplete.add(() => {
+
+            heartbeatAudioOn = true;
             
             const title = game.add.text(CANVASWIDTH / 2 - 100, CANVASHEIGHT / 2, "Thanks for playing", {font: "24px november", fill: "red"});
             const title2 = game.add.text(CANVASWIDTH / 2 - 148, CANVASHEIGHT / 2 + 64, "Game by Peetu Nuottajarvi", {font: "24px november", fill: "#990000"});
-
             const levelheart = game.add.sprite(CANVASWIDTH / 2 - 152, CANVASHEIGHT / 2 - 150, 'levelheart3');
             levelheart.scale.setTo(2, 2);
             levelheart.filters = [bgShader];
             levelheart.bringToTop();
+
+            player.destroy();
+            walls.destroy();
+            bpmMeter.destroy();
+            endscene.destroy();
+
+            setTimeout(() => {
+                audio["intro"].onStop.removeAll();
+                audio["introloop"].onStop.removeAll();
+                audio["intro"].play();
+                audio["intro"].onStop.add(() => {
+                    audio["introloop"].play();
+                    audio["introloop"].onStop.add(() => {
+                        audio["song"].play();
+                    });
+                })
+            }, 4000);
 
         });
 
@@ -227,8 +256,28 @@ function endGame() {
     }, 800);
 }
 
+function initAudio() {
+    audioNames.forEach((audioName) => {
+        audio[audioName] = game.add.audio(audioName);
+    });
+}
+
+function playIntro() {
+    audio["intro"].play();
+    audio["intro"].onStop.add(() => {
+        audio["introloop"].loopFull(1);
+        setTimeout(() => {
+            audio["introloop"].fadeOut(5000);
+        }, 12000)
+    })
+}
+
 function create() {
     timer = new Phaser.Time(game);
+    initAudio();
+
+    introPlayer = setInterval(playIntro, 40000);
+    playIntro();
 
     const pause = () => {
         if(playing) {
@@ -334,12 +383,14 @@ function play() {
     tilemapImg = game.make.bitmapData();
     tilemapImg.load('tileset');
 
+    heartbeatAudioOn = true;
     playing = true;
 }
 
 let changingLevel = false;
 let onPauseMenu = false;
 let skipFrame = 0;
+let noDoublePause = false;
 function update() {
     if (paused) {
         game.physics.arcade.collide(player, walls);
@@ -358,12 +409,35 @@ function update() {
             bgShader.update();
         }
 
-        if(pauseButton.isDown) {
+        if(pauseButton.isDown && !noDoublePause) {
+            noDoublePause = true;
             for(let i = 1; i < menuElems.length; i++) {
                 menuElems[i].destroy();
             }
-            clearInterval(idleanim);
-            cutscene.animations.play('full');
+
+            function startAnim() {
+                clearInterval(introPlayer);
+                clearInterval(idleanim);
+                cutscene.animations.play('full');
+                audio["song"].play();
+
+            }
+
+            const audiosPlaying = ["intro", "introloop"]
+                .filter(name => audio[name].isPlaying)
+                .map(name => {
+                    console.log("AUDIO PLAYING IS ", name);
+                    audio[name].onStop.removeAll();
+                    audio[name].onStop.add(() => {
+                        startAnim();
+                    });
+                    return name;
+                });
+
+            console.log("AUDIS PLAYING", audiosPlaying);
+            if(audiosPlaying.length === 0) {
+                startAnim();
+            } 
         }
 
     } else {
@@ -482,7 +556,10 @@ function update() {
             BPM = 0;
         }
 
-        if(BPM > 0 && beat > 60 / Math.max(9, BPM))
+        if(BPM > 0 && beat > 60 / Math.max(9, BPM)){
             beat = 0;
+            if(heartbeatAudioOn)
+               audio["heartbeat"].play();
+        }
     }
 }
