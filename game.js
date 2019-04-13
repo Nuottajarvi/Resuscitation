@@ -273,9 +273,23 @@ function playIntro() {
 }
 
 function create() {
-    timer = new Phaser.Time(game);
-    initAudio();
+    const text0 = game.add.text(130, 300, "This game consists of lots of blinking colors.\n Not recommended for people with Epilepsy.", {font: "24px november", fill: "#990000"});
+    const text1 = game.add.text(230, 420, "Click the screen to continue", {font: "24px november", fill: "#990000"});
 
+    game.input.onDown.add(() => {
+        text0.destroy();
+        text1.destroy();
+        startScreen();
+    }, this);
+
+    titleShader = new Phaser.Filter(game, null, getTitleShader());
+    titleShader.uniforms.beat = {type: '1f', value: 0};
+
+    timer = new Phaser.Time(game);
+}
+
+function startScreen() {
+    initAudio();
     introPlayer = setInterval(playIntro, 40000);
     playIntro();
 
@@ -305,14 +319,13 @@ function create() {
         return;
     }
     const title = game.add.text(CANVASWIDTH / 2 - 100, 32, "Rescuscitation", {font: "24px november", fill: "red"});
-
-    titleShader = new Phaser.Filter(game, null, getTitleShader());
-    titleShader.uniforms.beat = {type: '1f', value: 0};
     title.filters = [titleShader];
 
-    const controls = game.add.text(160, 540, "Move with ARROW KEYS, jump with SPACE", {font: "24px november", fill: "#990000"})
+    const controls = game.add.text(170, 540, "Move with ARROW KEYS, jump with SPACE", {font: "24px november", fill: "#990000"})
 
-    const start = game.add.text(180, 570, "Start and pause by pressing ENTER", {font: "24px november", fill: "#990000"});
+    const start0 = game.add.text(190, 570, "Start and pause by pressing ENTER", {font: "24px november", fill: "#990000"});
+
+    const start1 = game.add.text(260, 600, "Press ENTER to begin", {font: "24px november", fill: "#990000"});
 
     cutscene = game.add.sprite(230, 140, 'cutscene');
     cutscene.scale.x = 5;
@@ -328,7 +341,7 @@ function create() {
         cutscene.animations.play('idle');
     }, 2500);
 
-    menuElems = [cutscene, title, controls, start];
+    menuElems = [cutscene, title, controls, start0, start1];
 }
 
 function refreshShaders() {
@@ -409,7 +422,7 @@ function update() {
             bgShader.update();
         }
 
-        if(pauseButton.isDown && !noDoublePause) {
+        if(pauseButton && pauseButton.isDown && !noDoublePause) {
             noDoublePause = true;
             for(let i = 1; i < menuElems.length; i++) {
                 menuElems[i].destroy();

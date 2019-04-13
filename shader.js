@@ -14,7 +14,7 @@ void main(void) {
 	//isBackground
 	if(texColor.b > 0.99) {
 		if(beat < PI / 50. * 5.) {
-			col.r = sin(beat * 50.) * 0.3;
+			col.r = sin(beat * 50.) * 0.5;
 		}
 	}
 
