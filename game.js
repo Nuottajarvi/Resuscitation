@@ -33,7 +33,15 @@ let healthPack;
 let progressbar;
 let bgShader;
 
-const audioNames = ["heartbeat", "intro", "introloop", "song", "ending"];
+const audioNames = [
+    "heartbeat",
+    "intro",
+    "introloop",
+    "song",
+    "ending",
+    "footsteps",
+    "jump"
+];
 const audio = {};
 let heartbeatAudioOn = false;
 let introPlayer;
@@ -69,7 +77,6 @@ let waitingDie = false;
 let tilemapImg;
 
 function die(player, tile) {
-
     const index = tile.index;
 
     const corners = [
@@ -103,6 +110,7 @@ function die(player, tile) {
         waitingDie = true;
         player.body.enable = false;
         player.animations.play('death');
+        audio["footsteps"].stop();
         setTimeout(async () => {
             player.x = startPos.x;
             player.y = startPos.y;
@@ -265,7 +273,10 @@ function initAudio() {
 function playIntro() {
     audio["intro"].play();
     audio["intro"].onStop.add(() => {
-        audio["introloop"].loopFull(1);
+        audio["introloop"].play();
+        audio["introloop"].onStop.add(() => {
+            audio["introloop"].play();
+        });
         setTimeout(() => {
             audio["introloop"].fadeOut(5000);
         }, 12000)
@@ -276,11 +287,13 @@ function create() {
     const text0 = game.add.text(130, 300, "This game consists of lots of blinking colors.\n Not recommended for people with Epilepsy.", {font: "24px november", fill: "#990000"});
     const text1 = game.add.text(230, 420, "Click the screen to continue", {font: "24px november", fill: "#990000"});
 
-    game.input.onDown.add(() => {
+    const onDown = () => {
         text0.destroy();
         text1.destroy();
         startScreen();
-    }, this);
+        game.input.onDown.removeAll();
+    };
+    game.input.onDown.add(onDown, this);
 
     titleShader = new Phaser.Filter(game, null, getTitleShader());
     titleShader.uniforms.beat = {type: '1f', value: 0};
@@ -404,6 +417,7 @@ let changingLevel = false;
 let onPauseMenu = false;
 let skipFrame = 0;
 let noDoublePause = false;
+
 function update() {
     if (paused) {
         game.physics.arcade.collide(player, walls);
@@ -439,7 +453,6 @@ function update() {
             const audiosPlaying = ["intro", "introloop"]
                 .filter(name => audio[name].isPlaying)
                 .map(name => {
-                    console.log("AUDIO PLAYING IS ", name);
                     audio[name].onStop.removeAll();
                     audio[name].onStop.add(() => {
                         startAnim();
@@ -447,7 +460,6 @@ function update() {
                     return name;
                 });
 
-            console.log("AUDIS PLAYING", audiosPlaying);
             if(audiosPlaying.length === 0) {
                 startAnim();
             } 
@@ -472,6 +484,9 @@ function update() {
                     player.animations.play('left');
                     facing = 'left';
                 }
+
+                if(player.body.onFloor() && !audio["footsteps"].isPlaying)
+                    audio["footsteps"].loopFull(2);
             }
             else if (cursors.right.isDown)
             {
@@ -482,11 +497,16 @@ function update() {
                     player.animations.play('right');
                     facing = 'right';
                 }
+
+                console.log(player.body.onFloor() && !audio["footsteps"].isPlaying);
+                if(player.body.onFloor() && !audio["footsteps"].isPlaying)
+                    audio["footsteps"].loopFull(2);
             }
             else
             {
                 if (facing != 'idle')
                 {
+                    audio["footsteps"].stop();
                     player.animations.stop();
 
                     if (facing == 'left')
@@ -504,6 +524,9 @@ function update() {
             
             if (jumpButton.isDown && player.body.onFloor() && game.time.now > jumpTimer)
             {
+                audio["footsteps"].stop();
+                audio["jump"].volume = 2;
+                audio["jump"].play();
                 player.body.velocity.y = jump;
                 jumpTimer = game.time.now + 100;
             }
