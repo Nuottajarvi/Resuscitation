@@ -40,7 +40,8 @@ const audioNames = [
     "song",
     "ending",
     "footsteps",
-    "jump"
+    "jump",
+    "pickup"
 ];
 const audio = {};
 let heartbeatAudioOn = false;
@@ -133,6 +134,7 @@ function addbpm() {
 }
 
 function gameOver() {
+    audio["footsteps"].stop();
     if(!waitingDie) {
         waitingDie = true;
         //player.body.enable = false;
@@ -176,6 +178,7 @@ function loadNewLevel() {
                 healthPack.destroy();
                 endGame();
             } else {
+                audio["pickup"].play();
                 addbpm();
             }
         }, this);
@@ -498,7 +501,6 @@ function update() {
                     facing = 'right';
                 }
 
-                console.log(player.body.onFloor() && !audio["footsteps"].isPlaying);
                 if(player.body.onFloor() && !audio["footsteps"].isPlaying)
                     audio["footsteps"].loopFull(2);
             }
