@@ -111,7 +111,7 @@ function die(player, tile) {
         waitingDie = true;
         player.body.enable = false;
         player.animations.play('death');
-        audio["footsteps"].stop();
+        audio["footsteps"].fadeOut(5);
         setTimeout(async () => {
             player.x = startPos.x;
             player.y = startPos.y;
@@ -134,7 +134,7 @@ function addbpm() {
 }
 
 function gameOver() {
-    audio["footsteps"].stop();
+    audio["footsteps"].fadeOut(5);//stop();
     if(!waitingDie) {
         waitingDie = true;
         //player.body.enable = false;
@@ -286,15 +286,20 @@ function playIntro() {
     })
 }
 
+let clickedOnce = false;
+
 function create() {
     const text0 = game.add.text(130, 300, "This game consists of lots of blinking colors.\n Not recommended for people with Epilepsy.", {font: "24px november", fill: "#990000"});
     const text1 = game.add.text(230, 420, "Click the screen to continue", {font: "24px november", fill: "#990000"});
 
     const onDown = () => {
-        text0.destroy();
-        text1.destroy();
-        startScreen();
-        game.input.onDown.removeAll();
+        if(!clickedOnce) {
+            text0.destroy();
+            text1.destroy();
+            startScreen();
+            game.input.onDown.removeAll();
+            clickedOnce = true;
+        }
     };
     game.input.onDown.add(onDown, this);
 
@@ -306,7 +311,6 @@ function create() {
 
 function startScreen() {
     initAudio();
-    introPlayer = setInterval(playIntro, 40000);
     playIntro();
 
     const pause = () => {
@@ -337,7 +341,7 @@ function startScreen() {
     const title = game.add.text(CANVASWIDTH / 2 - 100, 32, "Rescuscitation", {font: "24px november", fill: "red"});
     title.filters = [titleShader];
 
-    const controls = game.add.text(170, 540, "Move with ARROW KEYS, jump with SPACE", {font: "24px november", fill: "#990000"})
+    const controls = game.add.text(170, 480, "    Headphones heavily recommended\n\nMove with ARROW KEYS, jump with SPACE", {font: "24px november", fill: "#990000"})
 
     const start0 = game.add.text(190, 570, "Start and pause by pressing ENTER", {font: "24px november", fill: "#990000"});
 
@@ -508,7 +512,7 @@ function update() {
             {
                 if (facing != 'idle')
                 {
-                    audio["footsteps"].stop();
+                    audio["footsteps"].fadeOut(5);//top();
                     player.animations.stop();
 
                     if (facing == 'left')
@@ -526,7 +530,7 @@ function update() {
             
             if (jumpButton.isDown && player.body.onFloor() && game.time.now > jumpTimer)
             {
-                audio["footsteps"].stop();
+                audio["footsteps"].fadeOut(5);
                 audio["jump"].volume = 2;
                 audio["jump"].play();
                 player.body.velocity.y = jump;
