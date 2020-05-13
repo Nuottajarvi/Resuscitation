@@ -19,6 +19,7 @@ let menuElems;
 let cutscene;
 let idleanim;
 let player;
+let restartButton;
 let walls;
 let bpmMeter;
 let facing = 'left';
@@ -52,44 +53,46 @@ let room = 1;
 let startPos;
 
 function preload() {
-    game.load.spritesheet('player', 'assets/player.png', 32, 48);
-    game.load.spritesheet('cutscene', 'assets/cutscene.png', 64, 64);
-    game.load.spritesheet('endscene', 'assets/endscene.png', 64, 64);
-    game.load.image('tileset', 'assets/tileset.png');
+    game.load.spritesheet('player', './assets/player.png', 32, 48);
+    game.load.spritesheet('cutscene', './assets/cutscene.png', 64, 64);
+    game.load.spritesheet('endscene', './assets/endscene.png', 64, 64);
+    game.load.image('tileset', './assets/tileset.png');
     for(let lvl = 1; lvl <= 3; lvl++) {
-       game.load.image('levelheart' + lvl, `assets/levelheart${lvl}.png`);
+       game.load.image('levelheart' + lvl, `./assets/levelheart${lvl}.png`);
     }
-    game.load.image('progressbar', 'assets/progressbar.png');
-    game.load.image('healthpack', 'assets/heart.png');
+    game.load.image('progressbar', './assets/progressbar.png');
+    game.load.image('healthpack', './assets/heart.png');
+    game.load.spritesheet('restart', './assets/restart.png', 111, 40);
     for(let lvl = 1; lvl <= 3; lvl++) {
         for(let room = 1; room <= 8; room++) {
-            game.load.image(`level${lvl}-${room}`, `assets/levels/${lvl}/${room}.png`);
+            game.load.image(`level${lvl}-${room}`, `./assets/levels/${lvl}/${room}.png`);
         }
     }
     
     audioNames.forEach((audioName) => {
-        game.load.audio(audioName, `assets/audio/${audioName}.wav`);
+        game.load.audio(audioName, `./assets/audio/${audioName}.wav`);
     });
 
     document.fonts.load('10pt "november"');
 }
 
 let waitingDie = false;
+let waitingGameOver = false;
 let tilemapImg;
 
 function die(player, tile) {
     const index = tile.index;
 
     const corners = [
-        {x: -1, y: 0},
-        {x: -1, y: 48},
-        {x: 33, y: 0},
-        {x: 33, y: 48},
+        {x: 4, y: 0},
+        {x: 4, y: 48},
+        {x: 28, y: 0},
+        {x: 28, y: 48},
         //edges
         {x: 16, y: 0},
         {x: 16, y: 48},
-        {x: -1, y: 24},
-        {x: 33, y: 24}
+        {x: 4, y: 24},
+        {x: 28, y: 24}
     ];
 
     const x = player.x - tile.worldX;
@@ -127,6 +130,19 @@ function die(player, tile) {
     }
 }
 
+function restart() {
+    room = 0;
+    loadNewLevel();
+    player.x = startPos.x;
+    player.y = startPos.y;
+    player.body.enable = true;
+    player.body.velocity.x = 0;
+    player.body.velocity.y = 0;
+    facing = "idle";
+    player.frame = 0;
+    BPM = 60;  
+}
+
 function addbpm() {
     BPM += 20;
     BPM = Math.min(BPM, 60);
@@ -137,21 +153,15 @@ function gameOver() {
     audio["footsteps"].fadeOut(5);//stop();
     if(!waitingDie) {
         waitingDie = true;
+        waitingGameOver = true;
         //player.body.enable = false;
         player.animations.play('death');
         setTimeout(async () => {
-            room = 0;
-            loadNewLevel();
-            player.x = startPos.x;
-            player.y = startPos.y;
-            player.body.enable = true;
-            player.body.velocity.x = 0;
-            player.body.velocity.y = 0;
-            facing = "idle";
-            player.frame = 0;
-            BPM = 60;
+            restart();
+            pause("GAME OVER");
             setTimeout(() => {
                 waitingDie = false;
+                waitingGameOver = false;
             }, 10);
         }, 4000);
     }
@@ -189,6 +199,7 @@ function loadNewLevel() {
     player.bringToTop();
     bpmMeter.bringToTop();
     progressbar.bringToTop();
+    restartButton.bringToTop();
     setProgressbar(room - 1);
 }
 
@@ -216,6 +227,7 @@ function setProgressbar(val) {
 }
 
 function endGame() {
+    restartButton.destroy();
     BPM = 30;
     walls.destroy();
     player.visible = false;
@@ -288,6 +300,24 @@ function playIntro() {
 
 let clickedOnce = false;
 
+function pause(text) {
+    if(playing) {
+        paused = !paused;
+        if(paused) {
+            restartButton.visible = false;
+            player.animations.stop();
+            pausetexts = [
+                game.add.text(CANVASWIDTH / 2 - 60, 300, text, {font: "24px november", fill: "#990000"}),
+                game.add.text(CANVASWIDTH / 2 - 140, 360, "press ENTER to continue", {font: "24px november", fill: "#990000"})
+            ];
+        } else {
+            restartButton.visible = true;
+            pausetexts.forEach(pt => pt.destroy());
+        }
+        game.physics.arcade.isPaused = paused;
+    }
+}
+
 function create() {
     const text0 = game.add.text(130, 300, "This game consists of lots of blinking colors.\n Not recommended for people with Epilepsy.", {font: "24px november", fill: "#990000"});
     const text1 = game.add.text(230, 420, "Click the screen to continue", {font: "24px november", fill: "#990000"});
@@ -313,27 +343,11 @@ function startScreen() {
     initAudio();
     playIntro();
 
-    const pause = () => {
-        if(playing) {
-            paused = !paused;
-            if(paused) {
-                player.animations.stop();
-                pausetexts = [
-                    game.add.text(CANVASWIDTH / 2 - 38, 300, "PAUSED", {font: "24px november", fill: "#990000"}),
-                    game.add.text(CANVASWIDTH / 2 - 140, 360, "press ENTER to continue", {font: "24px november", fill: "#990000"})
-                ];
-            } else {
-                pausetexts.forEach(pt => pt.destroy());
-            }
-            game.physics.arcade.isPaused = paused;
-        }
-    };
-
     pauseButton = game.input.keyboard.addKey(Phaser.Keyboard.ENTER);
-    pauseButton.onDown.add(pause);
+    pauseButton.onDown.add(() => pause("  PAUSED"));
 
     const pauseButtonAlt = game.input.keyboard.addKey(Phaser.Keyboard.P);
-    pauseButtonAlt.onDown.add(pause);
+    pauseButtonAlt.onDown.add(() => pause("  PAUSED"));
     if(DEBUG) {
         play();
         return;
@@ -341,7 +355,7 @@ function startScreen() {
     const title = game.add.text(CANVASWIDTH / 2 - 100, 32, "Rescuscitation", {font: "24px november", fill: "red"});
     title.filters = [titleShader];
 
-    const controls = game.add.text(170, 480, "    Headphones heavily recommended\n\nMove with ARROW KEYS, jump with SPACE", {font: "24px november", fill: "#990000"})
+    const controls = game.add.text(170, 480, "   Headphones heavily recommended\n\nMove with ARROW KEYS, jump with SPACE", {font: "24px november", fill: "#990000"})
 
     const start0 = game.add.text(190, 570, "Start and pause by pressing ENTER", {font: "24px november", fill: "#990000"});
 
@@ -390,6 +404,13 @@ function play() {
     const lvldata = loadLevel(level, room, game, die);
     walls = lvldata.walls;
     startPos = lvldata.startPos;
+
+    restartButton = game.add.button(5, 20, 'restart', restart, this, 1, 0, 1, 0);
+    const restartButtonAction = game.input.keyboard.addKey(Phaser.Keyboard.R);
+    restartButtonAction.onDown.add(() => {
+        if(restartButton.visible)
+            restart();
+    });
 
     player = game.add.sprite(startPos.x, startPos.y, 'player');
     game.physics.enable(player, Phaser.Physics.ARCADE);
@@ -454,7 +475,6 @@ function update() {
                 clearInterval(idleanim);
                 cutscene.animations.play('full');
                 audio["song"].play();
-
             }
 
             const audiosPlaying = ["intro", "introloop"]
@@ -566,6 +586,7 @@ function update() {
                     changingLevel = false;
                     loadNewLevel();
                     BPM = 60;
+                    restartButton.visible = true;
                 }, 4000);
 
             } else {
@@ -576,7 +597,16 @@ function update() {
 
         if(!changingLevel)
             BPM -= timer.physicsElapsedMS * 0.001 * difficulties[level-1];
-
+            
+        if(BPM < 20 && !changingLevel && !waitingGameOver) {
+            if(!restartButton.visible) {
+                restartButton.alpha = 0;
+                restartButton.visible = true;                
+                game.add.tween(restartButton).to({ alpha: 1 }, 2000, Phaser.Easing.Linear.None, true, 0, 0, false);
+            }
+        } else {
+            restartButton.visible = false;
+        }
         doBeat();
         bpmMeter.text = Math.ceil(BPM) + " BPM";
 
@@ -598,7 +628,7 @@ function update() {
             BPM = 0;
         }
 
-        if(BPM > 0 && beat > 60 / Math.max(9, BPM)){
+        if(BPM > 0 && beat > 60 / Math.max(20, BPM)){
             beat = 0;
             if(heartbeatAudioOn)
                audio["heartbeat"].play();
